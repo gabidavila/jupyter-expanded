@@ -5,15 +5,32 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive \
     MAMBA_ROOT_PREFIX=/opt/conda
 
+# Add Oracle MySQL APT repository on amd64 only (Oracle does not publish mysql-client for arm64).
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates \
+      gnupg \
+      && mkdir -p /etc/apt/keyrings \
+      && export GNUPGHOME="$(mktemp -d)" \
+      && gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys B7B3B788A8D3785C \
+      && gpg --batch --export B7B3B788A8D3785C | gpg --dearmor -o /etc/apt/keyrings/mysql.gpg \
+      && rm -rf "${GNUPGHOME}" \
+      && echo "deb [signed-by=/etc/apt/keyrings/mysql.gpg] http://repo.mysql.com/apt/debian/ bookworm mysql-8.0" \
+      > /etc/apt/sources.list.d/mysql.list \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # Base runtime + build deps for Ruby gems and language tooling.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    MYSQL_CLIENT_PKG="default-mysql-client"; \
+    if [ "${TARGETARCH}" = "amd64" ]; then MYSQL_CLIENT_PKG="mysql-community-client"; fi; \
+    apt-get update && apt-get install -y --no-install-recommends \
     bash \
     bzip2 \
     ca-certificates \
-    curl \
     composer \
+    curl \
     default-libmysqlclient-dev \
-    default-mysql-client \
     gcc \
     g++ \
     git \
@@ -30,6 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     npm \
     pkg-config \
     postgresql-client \
+    ${MYSQL_CLIENT_PKG} \
     php-cli \
     php-curl \
     php-mbstring \

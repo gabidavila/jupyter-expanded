@@ -11,6 +11,9 @@ This project builds a Docker image that launches JupyterLab with Python, Ruby (I
 ### Computer architecture
 - `linux/amd64` (x86_64) and `linux/arm64` (Apple Silicon / ARM64) are supported.
 - The Dockerfile uses `TARGETARCH` to pull the matching micromamba binary for each architecture.
+- MySQL client behavior by architecture:
+  - `linux/amd64`: Oracle official MySQL client (`mysql-community-client`) from `repo.mysql.com`.
+  - `linux/arm64`: Debian default MySQL client (`default-mysql-client`), because Oracle does not publish the official client package for arm64 in that repo.
 
 ### Disk space
 - Based on the current `jupyter-extended:latest` build on this repo:
