@@ -46,27 +46,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     xz-utils \
     zlib1g-dev \
-    && PHP_EXT_PACKAGES="$(apt-cache search '^php8.2-' | awk '{print $1}' | grep -E '^php8.2-' | grep -Ev '^(php8.2-(cli|common|opcache|readline|fpm|cgi|phpdbg|dev|yac|gmagick))$')" \
-    && apt-get install -y --no-install-recommends ${PHP_EXT_PACKAGES} \
-    && apt-get install -y --no-install-recommends composer \
     && rm -rf /var/lib/apt/lists/*
 
-# Install micromamba (single static binary) and create the Python/Jupyter env.
+# Install heavy Ruby gems early to improve layer cache reuse.
+RUN gem install --no-document bundler rails iruby mysql2 pg sqlite3
+
+# Install micromamba (single static binary) and create the Python/Jupyter env
+# with SQL and common data manipulation tooling.
 RUN if [ "${TARGETARCH}" = "arm64" ]; then MAMBA_ARCH="linux-aarch64"; else MAMBA_ARCH="linux-64"; fi \
     && curl -Ls "https://micro.mamba.pm/api/micromamba/${MAMBA_ARCH}/latest" \
     | tar -xvj -C /usr/local/bin --strip-components=1 bin/micromamba \
     && micromamba create -y -n base -c conda-forge \
       python=3.11 \
+      ipython-sql \
       jupyterlab \
+      jupysql \
+      numpy \
+      pandas \
+      pdfplumber \
+      pymysql \
+      psycopg2 \
+      sqlalchemy \
       xeus \
       xeus-cling \
     && micromamba clean --all --yes
 
 ENV PATH=/opt/conda/envs/base/bin:/opt/conda/bin:${PATH}
 
-# Install Ruby tooling/drivers and register IRuby as a Jupyter kernel.
-RUN gem install --no-document bundler rails iruby mysql2 pg sqlite3 \
-    && iruby register --force
+# Register IRuby after Jupyter is available.
+RUN iruby register --force
 
 # Install PHP kernel and register it with Jupyter.
 RUN composer global require rabrennie/jupyter-php-kernel \
