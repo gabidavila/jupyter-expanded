@@ -11,29 +11,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bzip2 \
     ca-certificates \
     curl \
+    composer \
+    default-libmysqlclient-dev \
+    default-mysql-client \
     gcc \
     g++ \
     git \
     libc6 \
     libffi-dev \
+    libpq-dev \
     libreadline-dev \
     libsqlite3-dev \
     libssl-dev \
     libyaml-dev \
+    libzmq3-dev \
     make \
     nodejs \
     npm \
+    pkg-config \
+    postgresql-client \
     php-cli \
     php-curl \
     php-mbstring \
+    php-mysql \
+    php-pgsql \
+    php-sqlite3 \
     php-xml \
+    php-zmq \
     php-zip \
     ruby-full \
     shared-mime-info \
     sqlite3 \
     tini \
+    unzip \
     xz-utils \
     zlib1g-dev \
+    && PHP_EXT_PACKAGES="$(apt-cache search '^php8.2-' | awk '{print $1}' | grep -E '^php8.2-' | grep -Ev '^(php8.2-(cli|common|opcache|readline|fpm|cgi|phpdbg|dev|yac|gmagick))$')" \
+    && apt-get install -y --no-install-recommends ${PHP_EXT_PACKAGES} \
+    && apt-get install -y --no-install-recommends composer \
     && rm -rf /var/lib/apt/lists/*
 
 # Install micromamba (single static binary) and create the Python/Jupyter env.
@@ -47,12 +62,20 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then MAMBA_ARCH="linux-aarch64"; else MAMB
       xeus-cling \
     && micromamba clean --all --yes
 
-# Install Rails globally.
-RUN gem install --no-document bundler rails
-
 ENV PATH=/opt/conda/envs/base/bin:/opt/conda/bin:${PATH}
 
-WORKDIR /workspace
+# Install Ruby tooling/drivers and register IRuby as a Jupyter kernel.
+RUN gem install --no-document bundler rails iruby mysql2 pg sqlite3 \
+    && iruby register --force
+
+# Install PHP kernel and register it with Jupyter.
+RUN composer global require rabrennie/jupyter-php-kernel \
+    && COMPOSER_BIN_DIR="$(composer global config bin-dir --absolute)" \
+    && ln -sf "${COMPOSER_BIN_DIR}/jupyter-php-kernel" /usr/local/bin/jupyter-php-kernel \
+    && jupyter-php-kernel --install
+
+RUN mkdir -p /workspace/src
+WORKDIR /workspace/src
 EXPOSE 8888
 
 CMD ["tini", "--", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
