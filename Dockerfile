@@ -2,6 +2,10 @@ FROM debian:bookworm-slim
 
 ARG TARGETARCH
 
+LABEL maintainer="gabidavila" \
+      description="Jupyter environment with Ruby, Python, PHP kernels and SQL support" \
+      version="1.0.0"
+
 ENV DEBIAN_FRONTEND=noninteractive \
     MAMBA_ROOT_PREFIX=/opt/conda
 
