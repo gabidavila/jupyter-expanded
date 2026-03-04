@@ -1,13 +1,19 @@
 FROM debian:bookworm-slim
 
 ARG TARGETARCH
-
-LABEL maintainer="gabidavila" \
-      description="Jupyter environment with Ruby, Python, PHP kernels and SQL support" \
-      version="1.0.0"
+ARG APP_USER=jupyter
+ARG APP_UID=1000
+ARG APP_GID=1000
 
 ENV DEBIAN_FRONTEND=noninteractive \
     MAMBA_ROOT_PREFIX=/opt/conda
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+LABEL org.opencontainers.image.maintainer="gabidavila" \ 
+      org.opencontainers.image.title="jupyter-extended" \
+      org.opencontainers.image.description="Jupyter environment with Ruby, Python, PHP kernels and SQL support" \
+      org.opencontainers.image.source="https://github.com/gabidavila/jupyter-ultimate"
 
 # Add Oracle MySQL APT repository on amd64 only (Oracle does not publish mysql-client for arm64).
 RUN if [ "${TARGETARCH}" = "amd64" ]; then \
@@ -70,8 +76,10 @@ RUN set -eux; \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install heavy Ruby gems early to improve layer cache reuse.
-RUN gem install --no-document bundler rails iruby mysql2 pg sqlite3
+# Install heavy Ruby gems early to improve layer cache reuse, then clean gem cache.
+RUN gem install --no-document bundler rails iruby mysql2 pg sqlite3 \
+    && gem cleanup \
+    && rm -rf /root/.gem
 
 # Install micromamba (single static binary) and create the Python/Jupyter env
 # with SQL and common data manipulation tooling.
@@ -95,17 +103,25 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then MAMBA_ARCH="linux-aarch64"; else MAMB
 
 ENV PATH=/opt/conda/envs/base/bin:/opt/conda/bin:${PATH}
 
+RUN groupadd --gid "${APP_GID}" "${APP_USER}" \
+    && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /bin/bash "${APP_USER}" \
+    && mkdir -p /workspace/src \
+    && chown -R "${APP_USER}:${APP_USER}" /workspace /opt/conda
+
+USER ${APP_USER}
+WORKDIR /workspace/src
+
 # Register IRuby after Jupyter is available.
 RUN iruby register --force
 
-# Install PHP kernel and register it with Jupyter.
+# Install PHP kernel and register it with Jupyter as non-root.
 RUN composer global require rabrennie/jupyter-php-kernel \
     && COMPOSER_BIN_DIR="$(composer global config bin-dir --absolute)" \
-    && ln -sf "${COMPOSER_BIN_DIR}/jupyter-php-kernel" /usr/local/bin/jupyter-php-kernel \
-    && jupyter-php-kernel --install
+    && "${COMPOSER_BIN_DIR}/jupyter-php-kernel" --install
 
-RUN mkdir -p /workspace/src
-WORKDIR /workspace/src
 EXPOSE 8888
 
-CMD ["tini", "--", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -fsS "http://127.0.0.1:8888/lab" > /dev/null || exit 1
+
+CMD ["tini", "--", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser"]
