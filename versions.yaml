@@ -1,0 +1,5 @@
+runtime: 2.4.0
+base_os: 2026.03.05
+base_conda: 2026.03.05
+python: "3.11.0"
+jupyterlab: "4.5.5"

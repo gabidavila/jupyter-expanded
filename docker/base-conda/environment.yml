@@ -1,0 +1,16 @@
+name: base
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - ipython-sql
+  - jupyterlab
+  - jupysql
+  - numpy
+  - pandas
+  - pdfplumber
+  - pymysql
+  - psycopg2
+  - sqlalchemy
+  - xeus
+  - xeus-cling
