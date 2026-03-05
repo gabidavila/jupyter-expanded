@@ -6,6 +6,10 @@
 # OS-generated files
 .DS_Store
 Thumbs.db
+.Trash/
+.Trash-*/
+**/.Trash/
+**/.Trash-*/
 
 # Notebook checkpoints
 .ipynb_checkpoints/
