@@ -1,4 +1,8 @@
 FROM debian:bookworm-slim
+LABEL org.opencontainers.image.authors="Gabriela Ferrara <gabidavila@users.noreply.github.com>" \
+      org.opencontainers.image.title="jupyter-extended" \
+      org.opencontainers.image.description="Jupyter environment with Ruby, Python, PHP kernels and SQL support" \
+      org.opencontainers.image.source="https://github.com/gabidavila/jupyter-ultimate"
 
 ARG TARGETARCH
 ARG APP_USER=jupyter
@@ -9,11 +13,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     MAMBA_ROOT_PREFIX=/opt/conda
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-LABEL org.opencontainers.image.maintainer="gabidavila" \ 
-      org.opencontainers.image.title="jupyter-extended" \
-      org.opencontainers.image.description="Jupyter environment with Ruby, Python, PHP kernels and SQL support" \
-      org.opencontainers.image.source="https://github.com/gabidavila/jupyter-ultimate"
 
 # Add Oracle MySQL APT repository on amd64 only (Oracle does not publish mysql-client for arm64).
 RUN if [ "${TARGETARCH}" = "amd64" ]; then \
@@ -101,7 +100,8 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then MAMBA_ARCH="linux-aarch64"; else MAMB
       xeus-cling \
     && micromamba clean --all --yes
 
-ENV PATH=/opt/conda/envs/base/bin:/opt/conda/bin:${PATH}
+ENV COMPOSER_HOME=/home/${APP_USER}/.composer \
+    PATH=/home/${APP_USER}/.composer/vendor/bin:/opt/conda/envs/base/bin:/opt/conda/bin:${PATH}
 
 RUN groupadd --gid "${APP_GID}" "${APP_USER}" \
     && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /bin/bash "${APP_USER}" \
