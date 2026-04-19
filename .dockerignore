@@ -1,3 +1,25 @@
+# Git
 .git
 .gitignore
+
+# OS/editor
 .DS_Store
+.idea/
+.vscode/
+*.code-workspace
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Trash
+.Trash-*/
+
+# CI
+.github/
+
+# Docs/other
+Dockerfile
+README.md
+LICENSE
+Makefile
+versions.yaml
