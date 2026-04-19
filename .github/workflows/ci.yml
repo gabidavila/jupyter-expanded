@@ -9,10 +9,15 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      runtime_version: ${{ steps.versions.outputs.runtime }}
+      base_os_version: ${{ steps.versions.outputs.base_os }}
+      base_conda_version: ${{ steps.versions.outputs.base_conda }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate versions.yaml
+      - name: Extract versions
+        id: versions
         run: |
           for key in runtime base_os base_conda python jupyterlab; do
             val=$(awk -F': *' -v k="$key" '$1==k {gsub(/"/,"",$2); print $2}' versions.yaml)
@@ -20,19 +25,52 @@ jobs:
               echo "::error::Missing key '$key' in versions.yaml"
               exit 1
             fi
+            echo "${key}=${val}" >> "$GITHUB_OUTPUT"
             echo "$key=$val"
           done
 
   build-and-test:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build base-os
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/base-os/Dockerfile
+          tags: |
+            jupyter-extended-base-os:${{ needs.validate.outputs.base_os_version }}
+            jupyter-extended-base-os:stable
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Build all images
-        run: make build-all
+      - name: Build base-conda
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/base-conda/Dockerfile
+          build-args: |
+            BASE_OS_IMAGE=jupyter-extended-base-os:${{ needs.validate.outputs.base_os_version }}
+          tags: |
+            jupyter-extended-base-conda:${{ needs.validate.outputs.base_conda_version }}
+            jupyter-extended-base-conda:stable
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build runtime
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/runtime/Dockerfile
+          build-args: |
+            BASE_CONDA_IMAGE=jupyter-extended-base-conda:${{ needs.validate.outputs.base_conda_version }}
+          tags: |
+            jupyter-extended:${{ needs.validate.outputs.runtime_version }}
+            jupyter-extended:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Run smoke tests
         run: make test
