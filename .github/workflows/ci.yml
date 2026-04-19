@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate versions.yaml
+        run: |
+          for key in runtime base_os base_conda python jupyterlab; do
+            val=$(awk -F': *' -v k="$key" '$1==k {gsub(/"/,"",$2); print $2}' versions.yaml)
+            if [ -z "$val" ]; then
+              echo "::error::Missing key '$key' in versions.yaml"
+              exit 1
+            fi
+            echo "$key=$val"
+          done
+
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build all images
+        run: make build-all
+
+      - name: Run smoke tests
+        run: make test
