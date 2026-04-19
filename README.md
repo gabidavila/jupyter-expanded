@@ -1,80 +1,117 @@
-# Jupyter Kernels Docker Image
+# Jupyter Extended
 
-This project builds a Docker image that launches JupyterLab with Python, Ruby (IRuby), PHP, and C++ (xeus-cling) kernels.
+Run JupyterLab with Python, Ruby (IRuby), PHP, and C++ (xeus-cling) kernels.
 
-## Requirements
+## Docker Run First
 
-### Software
-- Docker Engine 24+ or Docker Desktop 4+.
-- A shell terminal (`bash` or `zsh`).
-
-### Computer architecture
-- `linux/amd64` (x86_64) and `linux/arm64` (Apple Silicon / ARM64) are supported.
-- The Dockerfile uses `TARGETARCH` to pull the matching micromamba binary for each architecture.
-- MySQL client behavior by architecture:
-  - `linux/amd64`: Oracle official MySQL client (`mysql-community-client`) from `repo.mysql.com`.
-  - `linux/arm64`: Debian default MySQL client (`default-mysql-client`), because Oracle does not publish the official client package for arm64 in that repo.
-
-### Disk space
-- Based on the current `jupyter-extended:latest` build on this repo:
-  - Final image size: **~5.01 GB**
-  - Build cache produced during build: **~4.92 GB**
-- Practical recommendation: keep at least **12 GB free** before building.
-- After a clean build, Docker may use about **10 GB total** (image + cache), plus extra space for container writable layers and notebooks.
-- If you want to reclaim cache space after building, run:
+### 1) Build image (separate stages)
 
 ```bash
-docker builder prune -af
+./scripts/build/base-os.sh
+./scripts/build/base-conda.sh
+./scripts/build/runtime.sh
 ```
-You can check current Docker disk usage with:
+
+Optional one-line build:
 
 ```bash
-docker system df
+./scripts/build/all.sh
 ```
 
-## Build the image
-
-From the repository root:
-
-```bash
-docker build -t jupyter-extended .
-```
-
-## Run JupyterLab
-
-Run a container and map local workspace files into `/workspace`:
+### 2) Run container (interactive)
 
 ```bash
 docker run --rm -it \
   -p 8888:8888 \
   -v "$(pwd)":/workspace \
   --name jupyter-extended-dev \
-  jupyter-extended
+  jupyter-extended:latest
 ```
 
-The container starts JupyterLab with:
-- host: `0.0.0.0`
-- port: `8888`
-- root mode enabled (`--allow-root`)
-
-## Open JupyterLab in your browser
-
-1. After `docker run`, copy the URL printed in the logs (it includes the token), or use:
-   - `http://localhost:8888/lab`
-2. If prompted for a token/password, use the token shown in container logs.
-
-To view logs later:
+### 3) Or run detached
 
 ```bash
-docker logs jupyter-extended-dev
+docker run --rm -d \
+  -p 8888:8888 \
+  -v "$(pwd)":/workspace \
+  --name jupyter-extended-dev \
+  jupyter-extended:latest
 ```
 
-## Stop the container
+### 4) Open JupyterLab and get token
 
-If running interactively, press `Ctrl+C`.
+```bash
+docker logs --tail=120 jupyter-extended-dev
+```
 
-If running detached (`-d`), stop it with:
+Open:
+- `http://127.0.0.1:8888/lab`
+
+### 5) Stop container
+
+- If running interactively: `Ctrl+C`
+- If running detached:
 
 ```bash
 docker stop jupyter-extended-dev
 ```
+
+### 6) Useful run-time commands
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+docker exec jupyter-extended-dev /bin/bash -lc "/opt/conda/bin/jupyter kernelspec list"
+docker logs --tail=80 jupyter-extended-dev
+```
+
+## Validate Runtime
+
+Run smoke tests:
+
+```bash
+./scripts/test/runtime.sh
+```
+
+## Common Commands
+
+```bash
+make versions
+make build-all
+make build-base-os
+make build-base-conda
+make build-runtime
+make run
+make test
+```
+
+## Troubleshooting
+
+PHP kernel startup error (`No such file or directory: jupyter-php-kernel`):
+- Runtime image already exports Composer bin directory in `PATH`.
+- Rebuild runtime and restart container:
+
+```bash
+./scripts/build/runtime.sh
+docker stop jupyter-extended-dev || true
+./scripts/run/local.sh
+```
+
+## Advanced: Repo Structure And Versioning
+
+```text
+docker/base-os/         System packages + Ruby/PHP + DB client layer
+docker/base-conda/      Micromamba + Jupyter/Python/xeus layer
+docker/runtime/         Final runtime (user, kernels, entrypoint)
+scripts/                Build, run, test, release helpers
+tests/smoke/            Runtime smoke tests
+versions.yaml           Version source of truth
+```
+
+Version model in `versions.yaml`:
+- `runtime`: semver (example `2.4.0`)
+- `base_os`: date version (example `2026.03.05`)
+- `base_conda`: date version (example `2026.03.05`)
+
+Architecture notes:
+- `linux/amd64`: Oracle MySQL client (`mysql-community-client`)
+- `linux/arm64`: Debian default MySQL client (`default-mysql-client`)
