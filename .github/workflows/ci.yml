@@ -32,22 +32,42 @@ jobs:
   build-and-test:
     needs: validate
     runs-on: ubuntu-latest
+    env:
+      BUILD_CACHE_PATH: .buildx-cache
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image-cache=true
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_CACHE_PATH }}
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
       - name: Build base-os
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/base-os/Dockerfile
           tags: |
             jupyter-extended-base-os:${{ needs.validate.outputs.base_os_version }}
             jupyter-extended-base-os:stable
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=local,src=${{ env.BUILD_CACHE_PATH }}/base-os
+          cache-to: type=local,dest=${{ env.BUILD_CACHE_PATH }}/base-os-new,mode=max
+
+      - name: Move base-os cache
+        run: |
+          rm -rf ${{ env.BUILD_CACHE_PATH }}/base-os
+          mv ${{ env.BUILD_CACHE_PATH }}/base-os-new ${{ env.BUILD_CACHE_PATH }}/base-os
 
       - name: Build base-conda
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/base-conda/Dockerfile
@@ -56,11 +76,16 @@ jobs:
           tags: |
             jupyter-extended-base-conda:${{ needs.validate.outputs.base_conda_version }}
             jupyter-extended-base-conda:stable
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=local,src=${{ env.BUILD_CACHE_PATH }}/base-conda
+          cache-to: type=local,dest=${{ env.BUILD_CACHE_PATH }}/base-conda-new,mode=max
+
+      - name: Move base-conda cache
+        run: |
+          rm -rf ${{ env.BUILD_CACHE_PATH }}/base-conda
+          mv ${{ env.BUILD_CACHE_PATH }}/base-conda-new ${{ env.BUILD_CACHE_PATH }}/base-conda
 
       - name: Build runtime
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/runtime/Dockerfile
@@ -69,8 +94,13 @@ jobs:
           tags: |
             jupyter-extended:${{ needs.validate.outputs.runtime_version }}
             jupyter-extended:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=local,src=${{ env.BUILD_CACHE_PATH }}/runtime
+          cache-to: type=local,dest=${{ env.BUILD_CACHE_PATH }}/runtime-new,mode=max
+
+      - name: Move runtime cache
+        run: |
+          rm -rf ${{ env.BUILD_CACHE_PATH }}/runtime
+          mv ${{ env.BUILD_CACHE_PATH }}/runtime-new ${{ env.BUILD_CACHE_PATH }}/runtime
 
       - name: Run smoke tests
         run: make test
