@@ -4,14 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      runtime_version: ${{ steps.versions.outputs.runtime }}
+      base_os_version: ${{ steps.versions.outputs.base_os }}
+      base_conda_version: ${{ steps.versions.outputs.base_conda }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate versions.yaml
+      - name: Extract versions
+        id: versions
         run: |
           for key in runtime base_os base_conda python jupyterlab; do
             val=$(awk -F': *' -v k="$key" '$1==k {gsub(/"/,"",$2); print $2}' versions.yaml)
@@ -19,10 +25,12 @@ jobs:
               echo "::error::Missing key '$key' in versions.yaml"
               exit 1
             fi
+            echo "${key}=${val}" >> "$GITHUB_OUTPUT"
             echo "$key=$val"
           done
 
   build-and-test:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +39,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build all images
-        run: make build-all
+        run: PUSH=0 make build-all
 
       - name: Run smoke tests
         run: make test

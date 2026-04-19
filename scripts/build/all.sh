@@ -1,17 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-VERSIONS_FILE="${REPO_ROOT}/versions.yaml"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/common.sh"
 
-version_value() {
-  local key="$1"
-  awk -F': *' -v key="$key" '$1==key {gsub(/"/,"",$2); print $2}' "${VERSIONS_FILE}"
-}
-
-BASE_OS_VERSION="${BASE_OS_VERSION:-$(version_value base_os)}"
-BASE_CONDA_VERSION="${BASE_CONDA_VERSION:-$(version_value base_conda)}"
-RUNTIME_VERSION="${RUNTIME_VERSION:-$(version_value runtime)}"
+BASE_OS_VERSION="${BASE_OS_VERSION:-$(require_version base_os)}"
+BASE_CONDA_VERSION="${BASE_CONDA_VERSION:-$(require_version base_conda)}"
+RUNTIME_VERSION="${RUNTIME_VERSION:-$(require_version runtime)}"
 
 BASE_OS_REPO="${BASE_OS_REPO:-jupyter-extended-base-os}"
 BASE_CONDA_REPO="${BASE_CONDA_REPO:-jupyter-extended-base-conda}"
@@ -19,7 +13,7 @@ RUNTIME_REPO="${RUNTIME_REPO:-jupyter-extended}"
 PUSH="${PUSH:-0}"
 
 if [ -z "${BASE_OS_VERSION}" ] || [ -z "${BASE_CONDA_VERSION}" ] || [ -z "${RUNTIME_VERSION}" ]; then
-  echo "Missing version values in ${VERSIONS_FILE}" >&2
+  echo "Missing version values in versions.yaml" >&2
   exit 1
 fi
 
